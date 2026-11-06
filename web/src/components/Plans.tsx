@@ -1,7 +1,5 @@
-import { Check } from 'lucide-react';
 import { useState } from 'react';
 import {
-  ANNUAL_DISCOUNT,
   type BillingInterval,
   FREE_EMPLOYEE_LIMIT,
   PAID_PLANS,
@@ -12,7 +10,7 @@ import {
   type WorkspaceView,
 } from '../../../shared/billing.ts';
 import { money } from '../format.ts';
-import { Badge, Button, Section, Switch } from './ui.tsx';
+import { Button, Section } from './ui.tsx';
 
 interface Props {
   workspace: WorkspaceView;
@@ -30,22 +28,20 @@ export function Plans({ workspace, busy, onCheckout, onPortal }: Props) {
     plan === workspace.plan && (plan === 'free' || workspace.subscription?.interval === interval);
 
   const action = (plan: PlanId) => {
-    if (isCurrent(plan)) return <Button disabled>Current plan</Button>;
+    if (isCurrent(plan)) return <span className="plan__current">Your current plan</span>;
     if (plan === 'free') {
       return subscribed ? (
-        <Button variant="ghost" busy={busy === 'portal'} onClick={onPortal}>
-          Downgrade in portal
+        <Button busy={busy === 'portal'} onClick={onPortal}>
+          Downgrade
         </Button>
-      ) : (
-        <Button disabled>Included</Button>
-      );
+      ) : null;
     }
     // With a subscription, changes go through the Customer Portal: Stripe prorates them, and a
     // second Checkout would create a second subscription.
     if (subscribed) {
       return (
         <Button busy={busy === 'portal'} onClick={onPortal}>
-          Switch in portal
+          Switch to {PLANS[plan].name}
         </Button>
       );
     }
@@ -59,59 +55,56 @@ export function Plans({ workspace, busy, onCheckout, onPortal }: Props) {
   return (
     <Section
       id="plans"
-      title="Plans"
-      description={`Billed per active employee. Prices for your ${n} employees.`}
+      title="Change plan"
       actions={
-        <Switch
-          checked={interval === 'year'}
-          onChange={(yearly) => setInterval(yearly ? 'year' : 'month')}
-          label={
-            <>
-              Billed yearly <Badge tone="brand">−{ANNUAL_DISCOUNT * 100}%</Badge>
-            </>
-          }
-        />
+        <fieldset className="radios">
+          <legend className="sr-only">Billing interval</legend>
+          <label>
+            <input type="radio" name="interval" checked={interval === 'month'} onChange={() => setInterval('month')} />
+            Monthly
+          </label>
+          <label>
+            <input type="radio" name="interval" checked={interval === 'year'} onChange={() => setInterval('year')} />
+            Yearly (save 20%)
+          </label>
+        </fieldset>
       }
+      description={`Prices are per active employee. Totals are for your ${n} employees.`}
     >
-      <ul className="plans">
+      <div className="plans">
         {(['free', ...PAID_PLANS] as PlanId[]).map((plan) => {
           const seat = plan === 'free' ? 0 : seatPriceCents(plan, interval);
-          const perMonth = interval === 'month' ? seat : seat / 12;
           return (
-            <li
-              key={plan}
-              className={`plan ${isCurrent(plan) ? 'is-current' : ''} ${plan === 'pro' ? 'is-featured' : ''}`}
-            >
-              <div className="plan__head">
-                <h3>{PLANS[plan].name}</h3>
-                {plan === 'pro' && <Badge tone="brand">Popular</Badge>}
-                {isCurrent(plan) && <Badge tone="success">Current</Badge>}
-              </div>
-              <p className="plan__tagline">{PLANS[plan].tagline}</p>
+            <div key={plan} className={`plan ${isCurrent(plan) ? 'is-current' : ''}`}>
+              <h3>{PLANS[plan].name}</h3>
+              <p className="muted small">{PLANS[plan].tagline}</p>
               <p className="plan__price">
-                <strong>{money(perMonth)}</strong>
-                <span>{plan === 'free' ? 'forever' : 'per employee / month'}</span>
+                {plan === 'free' ? (
+                  '$0'
+                ) : (
+                  <>
+                    {money(interval === 'month' ? seat : seat / 12, { exact: true })}
+                    <span className="muted"> / employee / month</span>
+                  </>
+                )}
               </p>
-              <p className="plan__total">
+              <p className="muted small">
                 {plan === 'free'
                   ? n > FREE_EMPLOYEE_LIMIT
                     ? `Read-only above ${FREE_EMPLOYEE_LIMIT} employees`
-                    : `Covers your ${n} employees`
-                  : `${money(seat * n)} billed per ${interval}`}
+                    : `Up to ${FREE_EMPLOYEE_LIMIT} employees`
+                  : `${money(seat * n, { exact: true })} per ${interval}`}
               </p>
-              <div className="plan__action">{action(plan)}</div>
-              <ul className="plan__features">
+              <ul>
                 {PLANS[plan].features.map((f) => (
-                  <li key={f}>
-                    <Check size={15} className="plan__check" aria-hidden="true" />
-                    {f}
-                  </li>
+                  <li key={f}>{f}</li>
                 ))}
               </ul>
-            </li>
+              <div className="plan__action">{action(plan)}</div>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </Section>
   );
 }

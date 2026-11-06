@@ -1,22 +1,8 @@
-import { LoaderCircle } from 'lucide-react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type { Tone } from '../format.ts';
 
-export function Badge({
-  tone = 'neutral',
-  dot = false,
-  children,
-}: {
-  tone?: Tone;
-  dot?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <span className={`badge badge--${tone}`}>
-      {dot && <span className="badge__dot" aria-hidden="true" />}
-      {children}
-    </span>
-  );
+export function Label({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+  return <span className={`label label--${tone}`}>{children}</span>;
 }
 
 export function Section({
@@ -25,79 +11,42 @@ export function Section({
   description,
   actions,
   children,
-  className = '',
 }: {
   id: string;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
-  className?: string;
 }) {
   return (
-    <section className={`section ${className}`} aria-labelledby={`${id}-title`}>
-      <header className="section__header">
-        <div className="section__heading">
-          <h2 id={`${id}-title`} className="section__title">
-            {title}
-          </h2>
-          {description && <p className="section__description">{description}</p>}
-        </div>
+    <section className="section" aria-labelledby={`${id}-title`}>
+      <div className="section__header">
+        <h2 id={`${id}-title`}>{title}</h2>
         {actions && <div className="section__actions">{actions}</div>}
-      </header>
+      </div>
+      {description && <p className="section__description">{description}</p>}
       {children}
     </section>
   );
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'default' | 'link';
   size?: 'sm' | 'md';
   busy?: boolean;
-  icon?: ReactNode;
 };
 
-export function Button({ variant = 'secondary', size = 'md', busy = false, icon, children, ...props }: ButtonProps) {
+export function Button({ variant = 'default', size = 'md', busy = false, children, ...props }: ButtonProps) {
   return (
     <button
       type="button"
       {...props}
-      className={`button button--${variant} button--${size} ${props.className ?? ''}`}
+      className={`btn btn--${variant} btn--${size} ${props.className ?? ''}`}
       disabled={props.disabled || busy}
       aria-busy={busy || undefined}
     >
-      {busy ? <LoaderCircle className="spin" size={15} aria-hidden="true" /> : icon}
       {children}
+      {busy && <span className="btn__busy" aria-hidden="true" />}
     </button>
   );
-}
-
-export function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: ReactNode;
-}) {
-  return (
-    <label className="switch">
-      <input
-        type="checkbox"
-        role="switch"
-        aria-checked={checked}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="switch__track" aria-hidden="true">
-        <span className="switch__thumb" />
-      </span>
-      <span className="switch__label">{label}</span>
-    </label>
-  );
-}
-
-export function Kbd({ children }: { children: ReactNode }) {
-  return <code className="kbd">{children}</code>;
 }

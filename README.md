@@ -8,7 +8,7 @@ Built with Node.js, React, TypeScript and SQLite. It runs as a single process.
 
 **[Live demo →](https://stripe-billing-webhooks.onrender.com/)** Subscribe with the test card `4242 4242 4242 4242`, then use the demo controls to make the next renewal fail. It runs on a free instance, so the first visit after a quiet period can take about a minute to wake up.
 
-![Billing page after a failed renewal: plan overview with Pay now, the webhook pipeline and the guided demo](docs/screenshots/past-due.png)
+![Billing settings after a failed renewal: current plan with Pay now, and the test-mode controls](docs/screenshots/past-due.png)
 
 <p>
   <img src="docs/screenshots/past-due-dark.png" alt="Dark mode" width="68%">
@@ -41,8 +41,8 @@ Adding a "Subscribe" button takes an afternoon. Getting the follow-up right take
 - **Webhook pipeline:** verify, store, acknowledge, then process from a durable queue with retries, backoff, a dead-letter state and manual replay.
 - **One access policy** in [`access.ts`](server/src/billing/access.ts) turns Stripe statuses into what the customer can do (table below). The UI and the API both read it, so they can't disagree.
 - **Dunning:** "payment failed" emails per attempt, a "Pay now" button, and a read-only mode only after the final retry. Data is never deleted.
-- **Live webhook pipeline and event log:** a diagram of verify → store → queue → re-sync that lights up as events arrive, counters for duplicates, retries and failures, and a filterable log where each event opens to show its id, timing, deliveries, attempts and outcome, with one-click replay.
-- **Guided demo** on a Stripe test clock: subscribe, switch renewals to a card that declines, jump to the renewal date, and recover with Pay now. Each step ticks itself off.
+- **Webhook event log:** every event for the workspace with its outcome, a count of duplicates skipped, retries and failures, and a filter. Each row opens to show what happened (received, signature verified, stored, processed in N ms) and can be replayed.
+- **Test-mode controls** on a Stripe test clock: charge renewals to a card that declines, jump to the renewal date, and recover with Pay now.
 - **Production details:**
   - Prices are referenced by lookup key, so the same code runs on any sandbox or live account.
   - Idempotent setup script for products, prices, the portal and webhook endpoints.
@@ -106,9 +106,9 @@ npm run dev                   # API :3002, web http://localhost:5174, and `strip
 Then, on http://localhost:5174:
 
 1. **Upgrade to Pro** and pay with `4242 4242 4242 4242` (any future date, any CVC). The page waits for the webhook, then shows _Active_.
-2. In **Demo controls**, choose **Card that declines**, then **Advance to next renewal**. About ten seconds later the subscription is _Past due_, the warning appears and a "Payment failed" email is sent.
-3. Switch back to **Working card** and click **Pay now**. Stripe charges the open invoice and `invoice.paid` restores everything.
-4. Click **Replay** on any event. State is re-synced and no email is sent twice.
+2. In **Test mode**, set renewals to **Visa 0341 (declines)**, then click **Advance to renewal**. About ten seconds later the subscription is _Past due_, the warning appears and a "Payment failed" email is sent.
+3. Switch back to **Visa 4242 (succeeds)** and click **Pay now**. Stripe charges the open invoice and `invoice.paid` restores everything.
+4. Open any webhook event and click **Replay event**. State is re-synced and no email is sent twice.
 
 ## Deploy
 

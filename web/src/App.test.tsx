@@ -65,15 +65,15 @@ describe('App', () => {
     expect(await screen.findByText('Over the Free plan limit.')).toBeInTheDocument();
     expect(screen.getByText('Read-only')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeEnabled();
-    expect(screen.getByText('$84 billed per month')).toBeInTheDocument();
+    expect(screen.getByText('$84.00 per month')).toBeInTheDocument();
   });
 
   it('shows yearly prices with the 20% discount', async () => {
     mockApi({ 'GET /api/dashboard': dashboard() });
     render(<App />);
-    await userEvent.click(await screen.findByRole('switch', { name: /Billed yearly/ }));
+    await userEvent.click(await screen.findByLabelText('Yearly (save 20%)'));
     // Pro: $7 × 12 months × 0.8 = $67.20 per employee per year, × 12 employees.
-    expect(screen.getByText('$806.40 billed per year')).toBeInTheDocument();
+    expect(screen.getByText('$806.40 per year')).toBeInTheDocument();
   });
 
   it('starts Checkout with the chosen plan and interval', async () => {
@@ -95,7 +95,7 @@ describe('App', () => {
     const overview = await screen.findByRole('region', { name: 'Current plan' });
     expect(within(overview).getByText('Past due')).toBeInTheDocument();
     expect(within(overview).getByText('$84.00 on January 6, 2027')).toBeInTheDocument();
-    expect(within(overview).getByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
+    expect(within(overview).getByRole('button', { name: 'Manage in Stripe' })).toBeInTheDocument();
     // With a subscription, plan changes go through the portal instead of a second Checkout.
     expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
     await userEvent.click(within(overview).getByRole('button', { name: 'Pay now' }));
@@ -145,36 +145,28 @@ describe('App', () => {
       'POST /api/events/evt_1/replay': { ok: true },
     });
     render(<App />);
-    const row = await screen.findByRole('button', { name: /invoice\.paid/ });
-    expect(row).toHaveTextContent('2× delivered');
-    expect(row).toHaveAttribute('aria-expanded', 'false');
+    const toggle = await screen.findByRole('button', { name: /invoice\.paid/ });
+    expect(screen.getByText('×2')).toBeInTheDocument();
+    expect(screen.getByText(/1 duplicate delivery skipped/)).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
-    await userEvent.click(row);
-    expect(row).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('evt_1')).toBeInTheDocument();
-    expect(screen.getByText('250 ms after receipt')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Replay' }));
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Stored as evt_1')).toBeInTheDocument();
+    expect(screen.getByText(/Processed after 250 ms, 1 attempt/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Replay event' }));
     expect(calls.some((c) => c.url === '/api/events/evt_1/replay' && c.method === 'POST')).toBe(true);
 
-    await userEvent.click(screen.getByLabelText(/^Failed/));
+    await userEvent.selectOptions(screen.getByLabelText('Filter events'), 'failed');
     expect(screen.getByText('No failed events.')).toBeInTheDocument();
   });
 
-  it('ticks off the demo steps as the scenario progresses', async () => {
-    mockApi({
-      'GET /api/dashboard': {
-        ...proPastDue,
-        workspace: {
-          ...proPastDue.workspace,
-          demo: { clockTime: '2026-12-06T13:00:00.000Z', clockStatus: 'ready', card: 'failing' },
-        },
-      },
-    });
+  it('switches the renewal card from the test-mode panel', async () => {
+    const calls = mockApi({ 'GET /api/dashboard': proPastDue, 'PUT /api/demo/card': { ok: true } });
     render(<App />);
-    const guide = await screen.findByRole('region', { name: 'Try the failure cases' });
-    expect(within(guide).getAllByText('(done)')).toHaveLength(3);
-    expect(within(guide).getByRole('listitem', { current: 'step' })).toHaveTextContent('Recover the payment');
-    // Paying while the declining card is still selected would just fail again.
-    expect(within(guide).getByRole('button', { name: 'Pay now' })).toBeDisabled();
+    const panel = await screen.findByRole('region', { name: 'Test mode' });
+    await userEvent.selectOptions(within(panel).getByLabelText('Card used for renewals'), 'failing');
+    expect(calls.find((c) => c.url === '/api/demo/card')?.body).toEqual({ card: 'failing' });
+    expect(await screen.findByText(/charged to the card that declines/)).toBeInTheDocument();
   });
 });

@@ -1,21 +1,13 @@
-import { CircleAlert, CircleCheck, Info, LoaderCircle, TriangleAlert, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { BillingInterval, Notice, PaidPlanId } from '../../shared/billing.ts';
 import { api } from './api.ts';
-import { DemoGuide } from './components/DemoGuide.tsx';
+import { CurrentPlan } from './components/CurrentPlan.tsx';
+import { DemoControls } from './components/DemoControls.tsx';
 import { Events } from './components/Events.tsx';
 import { Inbox } from './components/Inbox.tsx';
-import { Pipeline } from './components/Pipeline.tsx';
-import { PlanOverview } from './components/PlanOverview.tsx';
 import { Plans } from './components/Plans.tsx';
-import { Sidebar } from './components/Sidebar.tsx';
-import { Badge } from './components/ui.tsx';
+import { SettingsNav, TopBar } from './components/Sidebar.tsx';
 import { type CheckoutReturn, useDashboard } from './useDashboard.ts';
-
-interface Toast {
-  id: number;
-  message: string;
-}
 
 /** Re-renders every few seconds so "12s ago" stays true. */
 function useNow(intervalMs = 5000) {
@@ -31,17 +23,17 @@ export function App() {
   const { data, error, refresh, checkoutReturn, dismissCheckoutReturn } = useDashboard();
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const toastId = useRef(0);
+  const [flash, setFlash] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const now = useNow();
 
-  const toast = useCallback((message: string) => {
-    const id = ++toastId.current;
-    setToasts((t) => [...t, { id, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  const showFlash = useCallback((message: string) => {
+    setFlash(message);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 5000);
   }, []);
 
-  /** Runs one action at a time, shows its error or a toast, then refreshes the dashboard. */
+  /** Runs one action at a time, shows its error or a confirmation, then refreshes the dashboard. */
   const run = useCallback(
     async (key: string, action: () => Promise<unknown>, success?: string) => {
       setBusy(key);
@@ -52,155 +44,110 @@ export function App() {
           window.location.assign(result.url); // Stripe Checkout or the Customer Portal
           return;
         }
-        if (success) toast(success);
+        if (success) showFlash(success);
         await refresh();
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Something went wrong');
       }
       setBusy(null);
     },
-    [refresh, toast],
+    [refresh, showFlash],
   );
 
   const onCheckout = (plan: PaidPlanId, interval: BillingInterval) =>
     run(`checkout-${plan}`, () => api.checkout(plan, interval));
   const onPortal = () => run('portal', api.portal);
-  const onRetryPayment = () =>
-    run('retry', api.retryPayment, 'Payment sent. Access updates when Stripe’s webhook arrives.');
-
   const workspace = data?.workspace ?? null;
 
   return (
-    <div className="shell">
-      <Sidebar workspace={workspace} />
-
-      <div className="main">
-        <header className="mobilebar">
-          <img src="/favicon.svg" alt="" width="24" height="24" />
-          <span className="mobilebar__name">TidyShift</span>
-          {workspace && <span className="mobilebar__workspace">{workspace.name}</span>}
-        </header>
+    <>
+      <TopBar demo={Boolean(workspace?.demo)} />
+      <div className="page">
+        <SettingsNav workspace={workspace} />
 
         <main className="content">
-          <div className="page-head">
-            <div>
-              <nav aria-label="Breadcrumb" className="crumbs">
-                <span>Settings</span>
-                <span aria-hidden="true">/</span>
-                <span aria-current="page">Billing</span>
-              </nav>
-              <h1>Billing</h1>
-              <p>Manage your plan, seats and payments. Access changes only when Stripe confirms it with a webhook.</p>
-            </div>
-            {workspace?.demo && (
-              <Badge tone="warning" dot>
-                Sandbox
-              </Badge>
-            )}
-          </div>
+          <h1>Billing</h1>
 
-          <div className="notices" aria-live="polite">
-            {checkoutReturn && <CheckoutBanner state={checkoutReturn} onDismiss={dismissCheckoutReturn} />}
+          <div aria-live="polite">
+            {checkoutReturn && <CheckoutFlash state={checkoutReturn} onDismiss={dismissCheckoutReturn} />}
             {actionError && (
-              <NoticeBanner
+              <Flash
                 notice={{ tone: 'danger', title: 'That didn’t work', message: actionError }}
                 onDismiss={() => setActionError(null)}
               />
             )}
-            {workspace?.notice && <NoticeBanner notice={workspace.notice} />}
+            {flash && (
+              <Flash notice={{ tone: 'info', title: 'Done', message: flash }} onDismiss={() => setFlash(null)} />
+            )}
+            {workspace?.notice && <Flash notice={workspace.notice} />}
           </div>
 
           {!data || !workspace ? (
-            <div className="loading" role="status">
-              {error ?? (
-                <>
-                  <LoaderCircle className="spin" size={16} aria-hidden="true" /> Loading billing…
-                </>
-              )}
-            </div>
+            <p className="muted" role="status">
+              {error ?? 'Loading…'}
+            </p>
           ) : (
-            <div className="layout">
-              <div className="layout__main">
-                <PlanOverview
-                  workspace={workspace}
-                  busy={busy}
-                  confirming={checkoutReturn === 'confirming'}
-                  onEmployees={(n) => run('employees', () => api.setEmployees(n))}
-                  onPortal={onPortal}
-                  onRetryPayment={onRetryPayment}
-                />
-                <Pipeline events={data.events} now={now} />
-                <Plans workspace={workspace} busy={busy} onCheckout={onCheckout} onPortal={onPortal} />
-                <Events
-                  events={data.events}
-                  busy={busy}
-                  now={now}
-                  onReplay={(id) => run(`replay-${id}`, () => api.replay(id), 'Event re-queued. Watch it run again.')}
-                />
-              </div>
-              <aside className="layout__side" aria-label="Demo">
-                <DemoGuide
-                  workspace={workspace}
-                  emails={data.emails}
-                  busy={busy}
-                  onAdvance={() =>
-                    run(
-                      'advance',
-                      api.advanceToRenewal,
-                      'Clock is moving. Stripe will bill the renewal in a few seconds.',
-                    )
-                  }
-                  onCard={(card) =>
-                    run(
-                      'card',
-                      () => api.setCard(card),
-                      card === 'failing' ? 'Renewals now go to a card that declines.' : 'Back to the working card.',
-                    )
-                  }
-                  onRetryPayment={onRetryPayment}
-                />
-                <Inbox emails={data.emails} now={now} />
-              </aside>
-            </div>
+            <>
+              <CurrentPlan
+                workspace={workspace}
+                busy={busy}
+                confirming={checkoutReturn === 'confirming'}
+                onEmployees={(n) => run('employees', () => api.setEmployees(n))}
+                onPortal={onPortal}
+                onRetryPayment={() =>
+                  run('retry', api.retryPayment, 'Payment submitted. Your plan updates when Stripe confirms it.')
+                }
+              />
+              <DemoControls
+                workspace={workspace}
+                busy={busy}
+                onAdvance={() =>
+                  run(
+                    'advance',
+                    api.advanceToRenewal,
+                    'The test clock is moving. Stripe bills the renewal in a few seconds.',
+                  )
+                }
+                onCard={(card) =>
+                  run(
+                    'card',
+                    () => api.setCard(card),
+                    card === 'failing'
+                      ? 'Renewals will be charged to the card that declines.'
+                      : 'Renewals will be charged to the card that succeeds.',
+                  )
+                }
+              />
+              <Plans workspace={workspace} busy={busy} onCheckout={onCheckout} onPortal={onPortal} />
+              <Events
+                events={data.events}
+                busy={busy}
+                now={now}
+                onReplay={(id) => run(`replay-${id}`, () => api.replay(id), `Event ${id} was queued again.`)}
+              />
+              <Inbox emails={data.emails} now={now} />
+            </>
           )}
 
           <footer className="footer">
-            Built by Luka Zelić · Stripe Checkout, Customer Portal and webhooks ·{' '}
-            <a href="https://github.com/Zela0912/stripe-billing-webhooks">Source</a>
+            TidyShift is a fictional company. This page is a demo of a Stripe billing integration by Luka Zelić ·{' '}
+            <a href="https://github.com/Zela0912/stripe-billing-webhooks">source code</a>
           </footer>
         </main>
       </div>
-
-      <div className="toasts" role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className="toast">
-            <CircleCheck size={16} className="toast__icon" aria-hidden="true" />
-            {t.message}
-          </div>
-        ))}
-      </div>
-    </div>
+    </>
   );
 }
 
-const NOTICE_ICONS = {
-  info: <Info size={18} aria-hidden="true" />,
-  warning: <TriangleAlert size={18} aria-hidden="true" />,
-  danger: <CircleAlert size={18} aria-hidden="true" />,
-};
-
-function NoticeBanner({ notice, onDismiss, busy = false }: { notice: Notice; onDismiss?: () => void; busy?: boolean }) {
+function Flash({ notice, onDismiss }: { notice: Notice; onDismiss?: () => void }) {
   return (
-    <div className={`notice notice--${notice.tone}`} role={notice.tone === 'danger' ? 'alert' : 'status'}>
-      <span className="notice__icon">
-        {busy ? <LoaderCircle className="spin" size={18} aria-hidden="true" /> : NOTICE_ICONS[notice.tone]}
-      </span>
-      <div className="notice__text">
+    <div className={`flash flash--${notice.tone}`} role={notice.tone === 'danger' ? 'alert' : 'status'}>
+      <p>
         <strong>{notice.title}.</strong> {notice.message}
-      </div>
+      </p>
       {onDismiss && (
-        <button type="button" className="notice__close" aria-label="Dismiss" onClick={onDismiss}>
-          <X size={16} aria-hidden="true" />
+        <button type="button" className="flash__close" aria-label="Dismiss" onClick={onDismiss}>
+          ×
         </button>
       )}
     </div>
@@ -211,23 +158,17 @@ const CHECKOUT_MESSAGES: Record<Exclude<CheckoutReturn, null>, Notice> = {
   confirming: {
     tone: 'info',
     title: 'Confirming your payment',
-    message: 'Waiting for Stripe’s webhook. The plan unlocks when the payment is verified, not when this page loads.',
+    message: 'We’re waiting for Stripe to confirm it. Your plan changes as soon as it does.',
   },
-  confirmed: { tone: 'info', title: 'Payment confirmed', message: 'The webhook arrived and your plan is active.' },
+  confirmed: { tone: 'info', title: 'Payment confirmed', message: 'Your new plan is active.' },
   timed_out: {
     tone: 'warning',
     title: 'Still waiting for Stripe',
-    message: 'The payment hasn’t been confirmed yet. This page updates on its own as soon as it is.',
+    message: 'Your payment hasn’t been confirmed yet. This page will update by itself.',
   },
-  canceled: { tone: 'info', title: 'Checkout canceled', message: 'Nothing was charged.' },
+  canceled: { tone: 'info', title: 'Checkout canceled', message: 'You weren’t charged.' },
 };
 
-function CheckoutBanner({ state, onDismiss }: { state: Exclude<CheckoutReturn, null>; onDismiss: () => void }) {
-  return (
-    <NoticeBanner
-      notice={CHECKOUT_MESSAGES[state]}
-      busy={state === 'confirming'}
-      onDismiss={state === 'confirming' ? undefined : onDismiss}
-    />
-  );
+function CheckoutFlash({ state, onDismiss }: { state: Exclude<CheckoutReturn, null>; onDismiss: () => void }) {
+  return <Flash notice={CHECKOUT_MESSAGES[state]} onDismiss={state === 'confirming' ? undefined : onDismiss} />;
 }
