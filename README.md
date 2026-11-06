@@ -6,6 +6,8 @@ Per-seat subscription billing for a SaaS app, built on **Stripe Checkout, the Cu
 
 Built with Node.js, React, TypeScript and SQLite. It runs as a single process.
 
+**[Live demo →](https://stripe-billing-webhooks.onrender.com/)** Subscribe with the test card `4242 4242 4242 4242`, then use the demo controls to make the next renewal fail. It runs on a free instance, so the first visit after a quiet period can take about a minute to wake up.
+
 ![Billing page after a failed renewal: warning, Pay now, webhook log and emails](docs/screenshots/past-due.png)
 
 > **Demo data:** _TidyShift_ is a fictional shift-scheduling SaaS (the same one as in my [docs chatbot](https://github.com/Zela0912/rag-docs-chatbot)). Everything runs in a Stripe sandbox, so no real money moves.
