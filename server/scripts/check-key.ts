@@ -102,7 +102,7 @@ if (clock && price) {
   // Advancing is asynchronous; a clock can only be deleted once it is ready again.
   for (let i = 0; i < 60; i++) {
     const current = await stripe.testHelpers.testClocks.retrieve(clock.id).catch(() => null);
-    if (!current || current.status !== 'advancing') break;
+    if (current?.status !== 'advancing') break;
     await new Promise((r) => setTimeout(r, 1000));
   }
   // Deleting the clock deletes its customer and subscription too.

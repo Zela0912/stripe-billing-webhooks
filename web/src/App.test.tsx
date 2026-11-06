@@ -65,15 +65,15 @@ describe('App', () => {
     expect(await screen.findByText('Over the Free plan limit.')).toBeInTheDocument();
     expect(screen.getByText('Read-only')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeEnabled();
-    expect(screen.getByText('$84 per month for 12 employees')).toBeInTheDocument();
+    expect(screen.getByText('$84 billed per month')).toBeInTheDocument();
   });
 
   it('shows yearly prices with the 20% discount', async () => {
     mockApi({ 'GET /api/dashboard': dashboard() });
     render(<App />);
-    await userEvent.click(await screen.findByLabelText('Yearly −20%'));
-    // Pro: $7 × 12 months × 0.8 = $67.20 per employee per year.
-    expect(screen.getByText(/\$806\.40 per year for 12 employees/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('switch', { name: /Billed yearly/ }));
+    // Pro: $7 × 12 months × 0.8 = $67.20 per employee per year, × 12 employees.
+    expect(screen.getByText('$806.40 billed per year')).toBeInTheDocument();
   });
 
   it('starts Checkout with the chosen plan and interval', async () => {
@@ -92,11 +92,13 @@ describe('App', () => {
   it('offers "Pay now" and the portal when a payment failed', async () => {
     const calls = mockApi({ 'GET /api/dashboard': proPastDue, 'POST /api/billing/retry-payment': { ok: true } });
     render(<App />);
-    expect(await screen.findByText('Past due')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
+    const overview = await screen.findByRole('region', { name: 'Current plan' });
+    expect(within(overview).getByText('Past due')).toBeInTheDocument();
+    expect(within(overview).getByText('$84.00 on January 6, 2027')).toBeInTheDocument();
+    expect(within(overview).getByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
     // With a subscription, plan changes go through the portal instead of a second Checkout.
     expect(screen.queryByRole('button', { name: /Upgrade to/ })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Pay now' }));
+    await userEvent.click(within(overview).getByRole('button', { name: 'Pay now' }));
     expect(calls.some((c) => c.url === '/api/billing/retry-payment')).toBe(true);
   });
 
@@ -108,7 +110,8 @@ describe('App', () => {
         : new Response(JSON.stringify(proPastDue)),
     );
     render(<App />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Pay now' }));
+    const overview = await screen.findByRole('region', { name: 'Current plan' });
+    await userEvent.click(within(overview).getByRole('button', { name: 'Pay now' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('The card was declined');
   });
 
@@ -120,8 +123,8 @@ describe('App', () => {
     expect(window.location.search).toBe('');
   });
 
-  it('lists webhook events with their outcome and duplicate deliveries', async () => {
-    mockApi({
+  it('lists webhook events, opens one, and filters by status', async () => {
+    const calls = mockApi({
       'GET /api/dashboard': dashboard(
         {},
         {
@@ -134,17 +137,44 @@ describe('App', () => {
               deliveries: 2,
               detail: 'Synced subscription; emailed "Receipt for $84.00"',
               receivedAt: '2026-11-06T12:00:00.000Z',
-              processedAt: '2026-11-06T12:00:01.000Z',
+              processedAt: '2026-11-06T12:00:00.250Z',
             },
           ],
         },
       ),
+      'POST /api/events/evt_1/replay': { ok: true },
     });
     render(<App />);
-    const table = await screen.findByRole('table');
-    const row = within(table).getAllByRole('row')[1];
-    expect(row).toHaveTextContent('invoice.paid');
+    const row = await screen.findByRole('button', { name: /invoice\.paid/ });
     expect(row).toHaveTextContent('2× delivered');
-    expect(within(row as HTMLElement).getByRole('button', { name: 'Replay' })).toBeInTheDocument();
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(row);
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('evt_1')).toBeInTheDocument();
+    expect(screen.getByText('250 ms after receipt')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Replay' }));
+    expect(calls.some((c) => c.url === '/api/events/evt_1/replay' && c.method === 'POST')).toBe(true);
+
+    await userEvent.click(screen.getByLabelText(/^Failed/));
+    expect(screen.getByText('No failed events.')).toBeInTheDocument();
+  });
+
+  it('ticks off the demo steps as the scenario progresses', async () => {
+    mockApi({
+      'GET /api/dashboard': {
+        ...proPastDue,
+        workspace: {
+          ...proPastDue.workspace,
+          demo: { clockTime: '2026-12-06T13:00:00.000Z', clockStatus: 'ready', card: 'failing' },
+        },
+      },
+    });
+    render(<App />);
+    const guide = await screen.findByRole('region', { name: 'Try the failure cases' });
+    expect(within(guide).getAllByText('(done)')).toHaveLength(3);
+    expect(within(guide).getByRole('listitem', { current: 'step' })).toHaveTextContent('Recover the payment');
+    // Paying while the declining card is still selected would just fail again.
+    expect(within(guide).getByRole('button', { name: 'Pay now' })).toBeDisabled();
   });
 });

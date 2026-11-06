@@ -8,7 +8,12 @@ Built with Node.js, React, TypeScript and SQLite. It runs as a single process.
 
 **[Live demo →](https://stripe-billing-webhooks.onrender.com/)** Subscribe with the test card `4242 4242 4242 4242`, then use the demo controls to make the next renewal fail. It runs on a free instance, so the first visit after a quiet period can take about a minute to wake up.
 
-![Billing page after a failed renewal: warning, Pay now, webhook log and emails](docs/screenshots/past-due.png)
+![Billing page after a failed renewal: plan overview with Pay now, the webhook pipeline and the guided demo](docs/screenshots/past-due.png)
+
+<p>
+  <img src="docs/screenshots/past-due-dark.png" alt="Dark mode" width="68%">
+  <img src="docs/screenshots/mobile.png" alt="Mobile layout" width="26%">
+</p>
 
 > **Demo data:** _TidyShift_ is a fictional shift-scheduling SaaS (the same one as in my [docs chatbot](https://github.com/Zela0912/rag-docs-chatbot)). Everything runs in a Stripe sandbox, so no real money moves.
 
@@ -36,8 +41,8 @@ Adding a "Subscribe" button takes an afternoon. Getting the follow-up right take
 - **Webhook pipeline:** verify, store, acknowledge, then process from a durable queue with retries, backoff, a dead-letter state and manual replay.
 - **One access policy** in [`access.ts`](server/src/billing/access.ts) turns Stripe statuses into what the customer can do (table below). The UI and the API both read it, so they can't disagree.
 - **Dunning:** "payment failed" emails per attempt, a "Pay now" button, and a read-only mode only after the final retry. Data is never deleted.
-- **Live event log:** every event for the workspace, with its outcome, attempt count and how many times Stripe delivered it.
-- **Demo controls** on a Stripe test clock: switch to a card that declines, then jump to the renewal date and watch the failed payment arrive.
+- **Live webhook pipeline and event log:** a diagram of verify → store → queue → re-sync that lights up as events arrive, counters for duplicates, retries and failures, and a filterable log where each event opens to show its id, timing, deliveries, attempts and outcome, with one-click replay.
+- **Guided demo** on a Stripe test clock: subscribe, switch renewals to a card that declines, jump to the renewal date, and recover with Pay now. Each step ticks itself off.
 - **Production details:**
   - Prices are referenced by lookup key, so the same code runs on any sandbox or live account.
   - Idempotent setup script for products, prices, the portal and webhook endpoints.
@@ -115,7 +120,7 @@ Then, on http://localhost:5174:
 
 ## Tests
 
-`npm test` runs **61 tests** offline, with no Stripe account, against an in-memory fake of the Stripe API and **real signature verification**. Among them:
+`npm test` runs **62 tests** offline, with no Stripe account, against an in-memory fake of the Stripe API and **real signature verification**. Among them:
 
 - forged, altered and wrongly signed webhooks are rejected
 - duplicate deliveries run once; two events about one payment send one email
