@@ -103,9 +103,17 @@ Then, on http://localhost:5174:
 3. Switch back to **Working card** and click **Pay now**. Stripe charges the open invoice and `invoice.paid` restores everything.
 4. Click **Replay** on any event. State is re-synced and no email is sent twice.
 
+## Deploy
+
+[`render.yaml`](render.yaml) is a Render Blueprint, and any Node host works the same way. Deploying takes three steps:
+
+1. **Create a restricted key** in the Stripe Dashboard (_Developers → API keys → Create restricted key_) with Write access to Customers, Checkout Sessions, Customer portal, Subscriptions, Invoices, PaymentMethods and Test clocks, and Read access to Prices. Put it in `.env.production.local` as `STRIPE_SECRET_KEY=rk_test_…` and run `npm run stripe:check-key`. The script tries every operation the app uses on a throwaway test clock and names any permission that is missing.
+2. **Deploy the Blueprint** with that key. `STRIPE_WEBHOOK_SECRET` can stay empty for now: the app starts, `/api/health` reports `"webhooks": "not_configured"`, and webhooks get a 503 that Stripe retries.
+3. **Create the webhook endpoint** for the public URL with `npm run stripe:setup -- --webhook-url=https://<service>.onrender.com/api/webhooks/stripe`. The signing secret goes into `.env.production.local` (it's never printed). Copy it to the host's environment variables.
+
 ## Tests
 
-`npm test` runs **58 tests** offline, with no Stripe account, against an in-memory fake of the Stripe API and **real signature verification**. Among them:
+`npm test` runs **61 tests** offline, with no Stripe account, against an in-memory fake of the Stripe API and **real signature verification**. Among them:
 
 - forged, altered and wrongly signed webhooks are rejected
 - duplicate deliveries run once; two events about one payment send one email
@@ -123,15 +131,15 @@ The full flow was also run end to end against a real Stripe sandbox, in a headle
 
 All settings are environment variables, validated at startup (see [`.env.example`](.env.example)).
 
-| Variable                | Default                   | Notes                                                                                 |
-| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`     | (none)                    | Required. `sk_test_…` locally; a restricted key (`rk_…`) for deployments              |
-| `STRIPE_WEBHOOK_SECRET` | (none)                    | Required. `npm run stripe:setup` writes the local one into `.env`                     |
-| `APP_URL`               | `http://localhost:5174`   | Where Checkout and the portal send customers back                                     |
-| `DEMO_MODE`             | `false`                   | Per-visitor workspaces on test clocks, plus the demo controls. Refused with live keys |
-| `RATE_LIMIT_PER_MINUTE` | `30`                      | Per IP, on the billing endpoints. Webhooks are not limited                            |
-| `TRUST_PROXY`           | `0`                       | `1` behind one reverse proxy (Render, Fly.io, Railway)                                |
-| `PORT`, `DB_PATH`       | `3002`, `data/billing.db` |                                                                                       |
+| Variable                | Default                                          | Notes                                                                                      |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `STRIPE_SECRET_KEY`     | (none)                                           | Required. `sk_test_…` locally; a restricted key (`rk_…`) for deployments                   |
+| `STRIPE_WEBHOOK_SECRET` | (none)                                           | `npm run stripe:setup` writes the local one into `.env`. Until it is set, webhooks get 503 |
+| `APP_URL`               | `RENDER_EXTERNAL_URL` or `http://localhost:5174` | Where Checkout and the portal send customers back                                          |
+| `DEMO_MODE`             | `false`                                          | Per-visitor workspaces on test clocks, plus the demo controls. Refused with live keys      |
+| `RATE_LIMIT_PER_MINUTE` | `30`                                             | Per IP, on the billing endpoints. Webhooks are not limited                                 |
+| `TRUST_PROXY`           | `0`                                              | `1` behind one reverse proxy (Render, Fly.io, Railway)                                     |
+| `PORT`, `DB_PATH`       | `3002`, `data/billing.db`                        |                                                                                            |
 
 ## Project structure
 

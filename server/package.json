@@ -7,7 +7,8 @@
     "start": "node --env-file-if-exists=../.env src/index.ts",
     "listen": "node --env-file-if-exists=../.env scripts/listen.ts",
     "stripe:setup": "node --env-file-if-exists=../.env scripts/setup-stripe.ts",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "stripe:check-key": "node --env-file-if-exists=../.env.production.local scripts/check-key.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

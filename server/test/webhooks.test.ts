@@ -197,3 +197,17 @@ describe('failures and retries', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('before the webhook secret is configured', () => {
+  it('answers 503 so Stripe retries later, and reports it in the health check', async () => {
+    const unconfigured = await startTestServer({ webhooksConfigured: false });
+    try {
+      const res = await unconfigured.deliver(stripeEvent('invoice.paid', invoice()));
+      expect(res.status).toBe(503);
+      const health = await (await fetch(`${unconfigured.url}/api/health`)).json();
+      expect(health).toMatchObject({ ok: true, webhooks: 'not_configured' });
+    } finally {
+      await unconfigured.close();
+    }
+  });
+});

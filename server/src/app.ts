@@ -11,7 +11,8 @@ import { webhookRouter } from './routes/webhooks.ts';
 import type { WebhookVerifier } from './webhooks/verify.ts';
 
 export interface AppOptions extends BillingRouteDeps {
-  verify: WebhookVerifier;
+  /** Null until STRIPE_WEBHOOK_SECRET is set. */
+  verify: WebhookVerifier | null;
   logger: Logger;
   rateLimitPerMinute: number;
   trustProxy: number;
@@ -28,7 +29,7 @@ export function createApp(options: AppOptions): express.Express {
   app.use(helmet());
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, demoMode: options.demoMode });
+    res.json({ ok: true, demoMode: options.demoMode, webhooks: options.verify ? 'configured' : 'not_configured' });
   });
 
   // Mounted before express.json(): signature verification needs the untouched raw body.

@@ -1,0 +1,35 @@
+# Render Blueprint. Deploy your own copy:
+#   https://render.com/deploy?repo=https://github.com/Zela0912/stripe-billing-webhooks
+# Render asks for the two Stripe secrets once, when the Blueprint is created.
+services:
+  - type: web
+    name: stripe-billing-webhooks
+    runtime: node
+    # Free instances sleep after 15 idle minutes; the first request then takes about a minute.
+    # The filesystem is ephemeral too, so demo workspaces reset on each deploy. Use a paid
+    # plan with a disk (or Postgres) for anything real.
+    plan: free
+    region: virginia
+    # devDependencies (Vite, TypeScript) are needed for the web build; Render sets
+    # NODE_ENV=production only at runtime, so npm ci installs them here.
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    # Only deploy commits whose CI checks passed.
+    autoDeployTrigger: checksPass
+    envVars:
+      # A restricted sandbox key (rk_test_…). Check it first with `npm run stripe:check-key`.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # From `npm run stripe:setup -- --webhook-url=https://<service>.onrender.com/api/webhooks/stripe`.
+      # Can be left empty on the first deploy: webhooks get 503 and Stripe retries them.
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: DEMO_MODE
+        value: "true"
+      # One reverse proxy (Render's load balancer) in front of the app, so rate limiting sees client IPs.
+      - key: TRUST_PROXY
+        value: "1"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "20"
+      # APP_URL is not needed: the app uses RENDER_EXTERNAL_URL, which Render sets automatically.

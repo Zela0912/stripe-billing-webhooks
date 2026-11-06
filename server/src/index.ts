@@ -23,7 +23,7 @@ const app = createApp({
   store,
   gateway,
   queue,
-  verify: createWebhookVerifier(config.stripeWebhookSecret),
+  verify: config.stripeWebhookSecret ? createWebhookVerifier(config.stripeWebhookSecret) : null,
   logger,
   now,
   appUrl: config.appUrl,
@@ -33,6 +33,12 @@ const app = createApp({
   trustProxy: config.trustProxy,
   webDistDir: config.webDistDir,
 });
+
+if (!config.stripeWebhookSecret) {
+  logger.warn('webhooks.not_configured', {
+    hint: 'Set STRIPE_WEBHOOK_SECRET. Until then webhooks get 503 and Stripe retries them later.',
+  });
+}
 
 const server = app.listen(config.port, () => {
   logger.info('server.started', {

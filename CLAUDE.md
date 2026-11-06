@@ -17,6 +17,7 @@ Stripe subscription billing for a fictional SaaS (TidyShift): Checkout, the Cust
 
 ```bash
 npm run stripe:setup        # idempotent: products, prices, portal config, local webhook secret → .env
+npm run stripe:check-key    # tries every operation with the key in .env.production.local, names missing permissions
 npm run dev                 # API :3002 + web :5174 (Vite proxies /api) + `stripe listen` forwarding
 npm run check               # lint + typecheck + test + build. Must pass before every commit
 npm test                    # Vitest, server + web, offline (fake Stripe API, real signatures)

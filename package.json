@@ -13,6 +13,7 @@
     "build": "npm run build -w web",
     "start": "npm run start -w server",
     "stripe:setup": "npm run stripe:setup -w server --",
+    "stripe:check-key": "npm run stripe:check-key -w server",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",

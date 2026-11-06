@@ -9,7 +9,7 @@ import { InvalidSignatureError, type WebhookVerifier } from '../webhooks/verify.
 export interface WebhookRouteDeps {
   store: Store;
   queue: WebhookQueue;
-  verify: WebhookVerifier;
+  verify: WebhookVerifier | null;
   logger: Logger;
   now: () => Date;
 }
@@ -27,6 +27,14 @@ export function webhookRouter(deps: WebhookRouteDeps): express.Router {
     const body: unknown = req.body;
     if (!Buffer.isBuffer(body)) {
       res.status(400).json({ error: 'Expected a JSON body' } satisfies ApiErrorBody);
+      return;
+    }
+
+    // Without a secret nothing can be verified. 503 tells Stripe to retry later, so events
+    // that arrive before the deployment is fully configured aren't lost.
+    if (!deps.verify) {
+      deps.logger.error('webhook.not_configured', {});
+      res.status(503).json({ error: 'Webhook signing secret not configured' } satisfies ApiErrorBody);
       return;
     }
 

@@ -141,7 +141,9 @@ export interface TestServer {
   close(): Promise<void>;
 }
 
-export async function startTestServer(options: { demoMode?: boolean; maxAttempts?: number } = {}): Promise<TestServer> {
+export async function startTestServer(
+  options: { demoMode?: boolean; maxAttempts?: number; webhooksConfigured?: boolean } = {},
+): Promise<TestServer> {
   const store = new Store(':memory:');
   const gateway = new FakeGateway();
   const now = () => NOW;
@@ -157,7 +159,7 @@ export async function startTestServer(options: { demoMode?: boolean; maxAttempts
     store,
     gateway,
     queue,
-    verify: createWebhookVerifier(WEBHOOK_SECRET),
+    verify: options.webhooksConfigured === false ? null : createWebhookVerifier(WEBHOOK_SECRET),
     logger: silentLogger,
     now,
     appUrl: 'http://app.test',

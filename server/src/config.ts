@@ -9,12 +9,19 @@ const EnvSchema = z.object({
   STRIPE_SECRET_KEY: z
     .string({ error: 'is required. Add your sandbox key to .env (see .env.example).' })
     .regex(/^(sk|rk)_(test|live)_\w+$/, 'must be a Stripe secret (sk_) or restricted (rk_) key'),
-  /** Signing secret of the webhook endpoint. `npm run stripe:setup` writes the local one into .env. */
+  /**
+   * Signing secret of the webhook endpoint. `npm run stripe:setup` writes the local one into .env.
+   * Optional so a fresh deployment can start before its endpoint exists: until it is set, the
+   * webhook route answers 503 and Stripe keeps retrying, so no event is lost.
+   */
   STRIPE_WEBHOOK_SECRET: z
-    .string({ error: 'is required. Run `npm run stripe:setup` to create it.' })
-    .regex(/^whsec_\w+$/, 'must start with whsec_'),
-  /** Public URL of the web app. Checkout and the Customer Portal redirect back here. */
-  APP_URL: z.url().default('http://localhost:5174'),
+    .string()
+    .regex(/^whsec_\w+$/, 'must start with whsec_')
+    .optional(),
+  /** Public URL of the web app. Checkout and the Customer Portal redirect back here. Defaults to Render's URL. */
+  APP_URL: z.url().optional(),
+  /** Set by Render for web services, e.g. https://myapp.onrender.com. */
+  RENDER_EXTERNAL_URL: z.url().optional(),
   /**
    * Demo mode gives every visitor their own workspace on a Stripe test clock and shows the
    * demo controls (advance time, switch to a failing card). Refused with live keys.
@@ -43,11 +50,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   if (demoMode && liveKey) {
     throw new Error('Invalid configuration: DEMO_MODE=true is only allowed with sandbox (test) keys.');
   }
-  const appUrl = e.APP_URL.replace(/\/+$/, '');
+  const appUrl = (e.APP_URL ?? e.RENDER_EXTERNAL_URL ?? 'http://localhost:5174').replace(/\/+$/, '');
 
   return {
     stripeSecretKey: e.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: e.STRIPE_WEBHOOK_SECRET,
+    stripeWebhookSecret: e.STRIPE_WEBHOOK_SECRET ?? null,
     appUrl,
     demoMode,
     port: e.PORT,
